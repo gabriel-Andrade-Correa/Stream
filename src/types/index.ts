@@ -18,6 +18,7 @@ export interface TitleItem {
   id: number;
   title: string;
   type: 'filme' | 'serie';
+  mediaType?: 'movie' | 'tv';
   overview: string;
   poster: string | null;
   backdrop?: string | null;

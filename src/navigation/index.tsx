@@ -14,7 +14,7 @@ export type RootStackParamList = {
   Splash: undefined;
   Onboarding: undefined;
   Tabs: undefined;
-  Details: { id: number };
+  Details: { id: number; mediaType?: 'movie' | 'tv' };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();

@@ -5,11 +5,16 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/api';
 
 const client = axios.create({
   baseURL: API_URL,
-  timeout: 10000
+  timeout: 20000
 });
 
 export async function fetchTrending() {
   const { data } = await client.get<{ data: TitleItem[] }>('/trending');
+  return data.data;
+}
+
+export async function fetchMostWatched() {
+  const { data } = await client.get<{ data: TitleItem[] }>('/most-watched');
   return data.data;
 }
 
@@ -18,8 +23,10 @@ export async function searchTitles(query: string) {
   return data.data;
 }
 
-export async function fetchTitle(id: number) {
-  const { data } = await client.get<{ data: TitleItem }>(`/title/${id}`);
+export async function fetchTitle(id: number, mediaType?: 'movie' | 'tv') {
+  const { data } = await client.get<{ data: TitleItem }>(`/title/${id}`, {
+    params: mediaType ? { mediaType } : undefined
+  });
   return data.data;
 }
 

@@ -1,15 +1,27 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation';
-import { fetchPlatforms, fetchRecommendations, fetchTrending } from '../services/api';
+import { fetchMostWatched, fetchRecommendations, fetchTrending } from '../services/api';
 import { useAppContext } from '../context/AppContext';
 import { SectionHeader } from '../components/SectionHeader';
 import { TitleCard } from '../components/TitleCard';
-import { StreamingPlatform, TitleItem } from '../types';
-import { DEFAULT_PLATFORM_NAMES } from '../data/platforms';
+import { TitleItem } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Tabs'>;
+
+type PlatformBrand = {
+  mark: string;
+};
+
+const PLATFORM_BRANDING: Record<string, PlatformBrand> = {
+  Netflix: { mark: 'N' },
+  'HBO Max': { mark: 'H' },
+  'Prime Video': { mark: 'P' },
+  'Disney+': { mark: 'D' },
+  'Apple TV+': { mark: 'A' }
+};
 
 function filterBySelectedPlatforms(items: TitleItem[], selected: string[]) {
   if (!selected.length) return [];
@@ -18,33 +30,65 @@ function filterBySelectedPlatforms(items: TitleItem[], selected: string[]) {
   );
 }
 
+function dedupeByMediaAndId(items: TitleItem[]) {
+  const map = new Map<string, TitleItem>();
+  (items || []).forEach((item) => {
+    const key = `${item.mediaType || item.type}:${item.id}`;
+    if (!map.has(key)) {
+      map.set(key, item);
+    }
+  });
+  return Array.from(map.values());
+}
+
+function normalizePlatformName(name: string) {
+  const aliasMap: Record<string, string> = {
+    'HBO Max Amazon Channel': 'Prime Video',
+    Max: 'HBO Max',
+    'Netflix Standard with Ads': 'Netflix',
+    'Amazon Prime Video': 'Prime Video',
+    'Amazon Prime Video with Ads': 'Prime Video'
+  };
+
+  return aliasMap[name] || name;
+}
+
+function PlatformPill({ name }: { name: string }) {
+  const normalized = normalizePlatformName(name);
+  const branding = PLATFORM_BRANDING[normalized] || {
+    mark: normalized.charAt(0).toUpperCase()
+  };
+
+  return (
+    <View style={[styles.platformChip, styles.platformChipActive]}>
+      <View style={styles.platformMark}>
+        <Text style={styles.platformMarkText}>{branding.mark}</Text>
+      </View>
+      <Text style={styles.platformChipText}>{normalized}</Text>
+    </View>
+  );
+}
+
 export function HomeScreen({ navigation }: Props) {
-  const { selectedPlatforms, continueWatching } = useAppContext();
+  const insets = useSafeAreaInsets();
+  const { selectedPlatforms } = useAppContext();
   const [loading, setLoading] = useState(true);
   const [trending, setTrending] = useState<TitleItem[]>([]);
+  const [mostWatched, setMostWatched] = useState<TitleItem[]>([]);
   const [recommendations, setRecommendations] = useState<TitleItem[]>([]);
-  const [platforms, setPlatforms] = useState<StreamingPlatform[]>(
-    DEFAULT_PLATFORM_NAMES.map((name) => ({
-      id: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      name
-    }))
-  );
 
   useEffect(() => {
     async function load() {
       try {
-        const [trendData, recData, platformData] = await Promise.all([
+        const [trendData, mostWatchedData, recData] = await Promise.all([
           fetchTrending(),
-          fetchRecommendations(),
-          fetchPlatforms().catch(() => [])
+          fetchMostWatched(),
+          fetchRecommendations()
         ]);
 
         setTrending(Array.isArray(trendData) ? trendData : []);
+        setMostWatched(Array.isArray(mostWatchedData) ? mostWatchedData : []);
         setRecommendations(Array.isArray(recData) ? recData : []);
-
-        if (Array.isArray(platformData) && platformData.length) {
-          setPlatforms(platformData);
-        }
       } finally {
         setLoading(false);
       }
@@ -53,27 +97,26 @@ export function HomeScreen({ navigation }: Props) {
     load();
   }, []);
 
-  const selected = Array.isArray(selectedPlatforms) ? selectedPlatforms : [];
+  const selected = Array.isArray(selectedPlatforms) ? selectedPlatforms.map(normalizePlatformName) : [];
   const filteredTrending = useMemo(() => filterBySelectedPlatforms(trending, selected), [trending, selected]);
+  const filteredMostWatched = useMemo(() => filterBySelectedPlatforms(mostWatched, selected), [mostWatched, selected]);
   const filteredRecommendations = useMemo(
     () => filterBySelectedPlatforms(recommendations, selected),
     [recommendations, selected]
   );
 
-  const continueItems = useMemo(
-    () =>
-      filteredTrending
-        .filter((item) => (Array.isArray(continueWatching) ? continueWatching : []).includes(item.id))
-        .slice(0, 6),
-    [filteredTrending, continueWatching]
+  const spotlight = useMemo(
+    () => dedupeByMediaAndId([...filteredTrending, ...filteredMostWatched]).slice(0, 60),
+    [filteredTrending, filteredMostWatched]
   );
 
   const catalogByPlatform = useMemo(() => {
-    const source = filteredTrending;
+    const source = spotlight;
     const map: Record<string, TitleItem[]> = {};
 
     source.forEach((item) => {
-      (item.availableOn || []).forEach((platform) => {
+      (item.availableOn || []).forEach((platformRaw) => {
+        const platform = normalizePlatformName(platformRaw);
         if (!selected.includes(platform)) return;
         if (!map[platform]) map[platform] = [];
         map[platform].push(item);
@@ -86,12 +129,15 @@ export function HomeScreen({ navigation }: Props) {
         titles: (map[platform] || []).slice(0, 40)
       }))
       .filter((group) => group.titles.length > 0);
-  }, [filteredTrending, selected]);
+  }, [spotlight, selected]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.heading}>Seu hub de streaming</Text>
-      <Text style={styles.subheading}>Plataformas ativas: {selected.join(', ') || 'Nenhuma selecionada'}</Text>
+      <View style={[styles.heroCard, { marginTop: insets.top + 8 }]}> 
+        <Text style={styles.heading}>Seu hub de streaming</Text>
+        <Text style={styles.subheading}>Tudo que importa em um unico lugar</Text>
+        <Text style={styles.metaLine}>Plataformas ativas: {selected.join(', ') || 'Nenhuma selecionada'}</Text>
+      </View>
 
       {loading && <ActivityIndicator color="#6D5BFF" size="large" style={{ marginTop: 24 }} />}
 
@@ -100,64 +146,35 @@ export function HomeScreen({ navigation }: Props) {
           <SectionHeader title="Seus streamings" />
           <View style={styles.platformRow}>
             {selected.length ? (
-              selected.map((name) => (
-                <View key={`selected-${name}`} style={[styles.platformChip, styles.platformChipActive]}>
-                  <Text style={styles.platformChipText}>{name}</Text>
-                </View>
-              ))
+              selected.map((name) => <PlatformPill key={`selected-${name}`} name={name} />)
             ) : (
               <Text style={styles.emptyText}>Selecione suas plataformas em Configuracoes para ver o catalogo.</Text>
             )}
           </View>
 
-          <SectionHeader title="Plataformas disponiveis" />
-          <View style={styles.platformRow}>
-            {platforms.map((platform) => {
-              const isSelected = selected.includes(platform.name);
-              return (
-                <View key={platform.id} style={[styles.platformChip, isSelected && styles.platformChipActive]}>
-                  <Text style={styles.platformChipText}>{platform.name}</Text>
-                </View>
-              );
-            })}
-          </View>
-
           {!!selected.length && (
             <>
-              <SectionHeader title="Em alta" />
+              <SectionHeader title="Em alta agora" />
               <FlatList
                 horizontal
-                data={filteredTrending}
-                keyExtractor={(item) => String(item.id)}
+                data={spotlight}
+                keyExtractor={(item) => `${item.mediaType || item.type}-${item.id}`}
                 renderItem={({ item }) => (
-                  <TitleCard item={item} onPress={() => navigation.navigate('Details', { id: item.id })} />
+                  <TitleCard item={item} onPress={() => navigation.navigate('Details', { id: item.id, mediaType: item.mediaType })} />
                 )}
                 showsHorizontalScrollIndicator={false}
               />
 
-              <SectionHeader title="Continuar assistindo" />
-              <View style={styles.grid}>
-                {continueItems.map((item) => (
-                  <TitleCard
-                    key={item.id}
-                    compact
-                    item={item}
-                    onPress={() => navigation.navigate('Details', { id: item.id })}
-                  />
-                ))}
-              </View>
-
-              <SectionHeader title="Recomendacoes para voce" />
-              {filteredRecommendations.slice(0, 5).map((item) => (
-                <TouchableOpacity
-                  key={`rec-${item.id}`}
-                  style={styles.rowCard}
-                  onPress={() => navigation.navigate('Details', { id: item.id })}
-                >
-                  <Text style={styles.rowTitle}>{item.title}</Text>
-                  <Text style={styles.rowMeta}>{(item.availableOn || []).join(', ')}</Text>
-                </TouchableOpacity>
-              ))}
+              <SectionHeader title="Recomendados para voce" />
+              <FlatList
+                horizontal
+                data={filteredRecommendations.slice(0, 40)}
+                keyExtractor={(item) => `rec-${item.mediaType || item.type}-${item.id}`}
+                renderItem={({ item }) => (
+                  <TitleCard item={item} onPress={() => navigation.navigate('Details', { id: item.id, mediaType: item.mediaType })} />
+                )}
+                showsHorizontalScrollIndicator={false}
+              />
 
               <SectionHeader title="Catalogo por plataforma" />
               {catalogByPlatform.map((group) => (
@@ -166,9 +183,9 @@ export function HomeScreen({ navigation }: Props) {
                   <FlatList
                     horizontal
                     data={group.titles}
-                    keyExtractor={(item) => `${group.platform}-${item.id}`}
+                    keyExtractor={(item) => `${group.platform}-${item.mediaType || item.type}-${item.id}`}
                     renderItem={({ item }) => (
-                      <TitleCard item={item} onPress={() => navigation.navigate('Details', { id: item.id })} />
+                      <TitleCard item={item} onPress={() => navigation.navigate('Details', { id: item.id, mediaType: item.mediaType })} />
                     )}
                     showsHorizontalScrollIndicator={false}
                   />
@@ -185,21 +202,32 @@ export function HomeScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#070B14'
+    backgroundColor: '#030303'
   },
   content: {
-    padding: 16,
+    paddingHorizontal: 16,
     paddingBottom: 32
+  },
+  heroCard: {
+    backgroundColor: '#0A0A0A',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12
   },
   heading: {
     color: '#E7ECF6',
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '800'
   },
   subheading: {
-    color: '#97A3BA',
+    color: '#B8C2D6',
     marginTop: 6,
-    marginBottom: 8
+    fontSize: 15
+  },
+  metaLine: {
+    color: '#97A3BA',
+    marginTop: 10,
+    fontSize: 13
   },
   platformRow: {
     flexDirection: 'row',
@@ -207,18 +235,31 @@ const styles = StyleSheet.create({
     marginBottom: 6
   },
   platformChip: {
-    backgroundColor: '#192338',
-    borderColor: '#2A3550',
-    borderWidth: 1,
+    backgroundColor: '#0D0D0D',
     borderRadius: 999,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 7,
     marginRight: 8,
-    marginBottom: 8
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center'
   },
   platformChipActive: {
-    backgroundColor: '#6D5BFF',
-    borderColor: '#958AFF'
+    backgroundColor: '#111317'
+  },
+  platformMark: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#080808',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6
+  },
+  platformMarkText: {
+    color: '#E7ECF6',
+    fontSize: 10,
+    fontWeight: '800'
   },
   platformChipText: {
     color: '#E7ECF6',
@@ -228,28 +269,6 @@ const styles = StyleSheet.create({
   emptyText: {
     color: '#97A3BA',
     marginBottom: 8
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between'
-  },
-  rowCard: {
-    backgroundColor: '#121A2B',
-    borderColor: '#2A3550',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10
-  },
-  rowTitle: {
-    color: '#E7ECF6',
-    fontSize: 15,
-    fontWeight: '700'
-  },
-  rowMeta: {
-    color: '#97A3BA',
-    marginTop: 4
   },
   catalogSection: {
     marginTop: 8

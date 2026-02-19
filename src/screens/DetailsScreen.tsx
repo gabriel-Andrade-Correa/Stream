@@ -9,14 +9,14 @@ import { openStreamingSearch, openStreamingTitle } from '../utils/deeplink';
 type Props = NativeStackScreenProps<RootStackParamList, 'Details'>;
 
 export function DetailsScreen({ route }: Props) {
-  const { id } = route.params;
+  const { id, mediaType } = route.params;
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState<TitleItem | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
-        const data = await fetchTitle(id);
+        const data = await fetchTitle(id, mediaType);
         setTitle(data);
       } finally {
         setLoading(false);
@@ -24,7 +24,7 @@ export function DetailsScreen({ route }: Props) {
     }
 
     load();
-  }, [id]);
+  }, [id, mediaType]);
 
   const firstLink = useMemo(() => title?.deepLinks?.[0], [title]);
   const hasDirectLink = !!(firstLink?.directApp || firstLink?.directWeb);

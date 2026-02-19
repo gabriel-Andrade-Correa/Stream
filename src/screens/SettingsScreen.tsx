@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlatformChip } from '../components/PlatformChip';
 import { useAppContext } from '../context/AppContext';
 import { fetchPlatforms } from '../services/api';
@@ -7,6 +8,10 @@ import { StreamingPlatform } from '../types';
 import { DEFAULT_PLATFORM_NAMES } from '../data/platforms';
 
 export function SettingsScreen() {
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const compact = width < 390;
+
   const { theme, selectedPlatforms, toggleTheme, setSelectedPlatforms, clearPreferences } = useAppContext();
   const [platforms, setPlatforms] = useState<StreamingPlatform[]>(
     DEFAULT_PLATFORM_NAMES.map((name) => ({
@@ -39,10 +44,10 @@ export function SettingsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.heading}>Configuracoes</Text>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}> 
+      <Text style={[styles.heading, compact && styles.headingCompact]}>Configuracoes</Text>
 
-      <View style={styles.card}>
+      <View style={[styles.card, compact && styles.cardCompact]}>
         <Text style={styles.cardTitle}>Escolha suas plataformas</Text>
         <Text style={styles.cardSubtitle}>Somente os titulos dessas plataformas aparecerao no app.</Text>
         <View style={styles.rowWrap}>
@@ -57,7 +62,7 @@ export function SettingsScreen() {
         </View>
       </View>
 
-      <View style={styles.card}>
+      <View style={[styles.card, styles.themeCard, compact && styles.cardCompact]}>
         <Text style={styles.cardTitle}>Tema {theme === 'dark' ? 'escuro' : 'claro'}</Text>
         <Switch value={theme === 'dark'} onValueChange={toggleTheme} trackColor={{ false: '#94A3B8', true: '#6D5BFF' }} />
       </View>
@@ -75,7 +80,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#070B14'
   },
   content: {
-    padding: 16,
+    paddingHorizontal: 16,
     paddingBottom: 32
   },
   heading: {
@@ -84,6 +89,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 14
   },
+  headingCompact: {
+    fontSize: 24
+  },
   card: {
     backgroundColor: '#121A2B',
     borderRadius: 14,
@@ -91,6 +99,14 @@ const styles = StyleSheet.create({
     borderColor: '#2A3550',
     padding: 14,
     marginBottom: 14
+  },
+  cardCompact: {
+    padding: 12
+  },
+  themeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
   },
   cardTitle: {
     color: '#E7ECF6',
