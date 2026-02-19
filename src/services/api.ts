@@ -18,9 +18,9 @@ export async function fetchMostWatched() {
   return data.data;
 }
 
-export async function fetchCatalogByPlatform(name: string, pages = 2, limit = 180) {
+export async function fetchCatalogByPlatform(name: string, pages = 2, limit = 180, page = 1) {
   const { data } = await client.get<{ data: TitleItem[] }>('/catalog/platform', {
-    params: { name, pages, limit }
+    params: { name, pages, limit, page }
   });
   return data.data;
 }

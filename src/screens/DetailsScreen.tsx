@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+ï»¿import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
@@ -26,12 +26,11 @@ export function DetailsScreen({ route }: Props) {
     load();
   }, [id, mediaType]);
 
-  const primaryLink = useMemo(() => {
-    if (!title?.deepLinks?.length) return null;
-    return title.deepLinks.find((link) => link.directApp || link.directWeb) || title.deepLinks[0];
-  }, [title]);
-
-  const hasDirectLink = !!(primaryLink?.directApp || primaryLink?.directWeb);
+  const links = useMemo(() => title?.deepLinks || [], [title]);
+  const hasAnyDirectLink = useMemo(
+    () => links.some((link) => link.directApp || link.directWeb),
+    [links]
+  );
 
   if (loading) {
     return (
@@ -44,7 +43,7 @@ export function DetailsScreen({ route }: Props) {
   if (!title) {
     return (
       <View style={styles.center}>
-        <Text style={styles.emptyText}>Título não encontrado.</Text>
+        <Text style={styles.emptyText}>Titulo nao encontrado.</Text>
       </View>
     );
   }
@@ -60,20 +59,30 @@ export function DetailsScreen({ route }: Props) {
       )}
 
       <Text style={styles.title}>{title.title}</Text>
-      <Text style={styles.meta}>{title.type.toUpperCase()} • {(title.availableOn || []).join(', ')}</Text>
-      <Text style={styles.overview}>{title.overview || 'Sem sinopse disponível.'}</Text>
+      <Text style={styles.meta}>{title.type.toUpperCase()} â€¢ {(title.availableOn || []).join(', ')}</Text>
+      <Text style={styles.overview}>{title.overview || 'Sem sinopse disponivel.'}</Text>
 
-      {!!primaryLink && hasDirectLink && (
-        <Pressable style={styles.button} onPress={() => openStreamingTitle(primaryLink)}>
-          <Text style={styles.buttonText}>Abrir titulo no streaming</Text>
-        </Pressable>
-      )}
+      <Text style={styles.sectionTitle}>Onde assistir</Text>
+      <Text style={styles.linkHint}>
+        {hasAnyDirectLink
+          ? 'Algumas plataformas abrem direto no titulo.'
+          : 'Link direto indisponivel para este titulo. Use a busca por plataforma.'}
+      </Text>
 
-      {!!primaryLink && (
-        <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => openStreamingSearch(primaryLink)}>
-          <Text style={styles.buttonText}>Buscar no streaming</Text>
-        </Pressable>
-      )}
+      {links.map((link) => {
+        const hasDirect = !!(link.directApp || link.directWeb);
+        return (
+          <View key={`${title.id}-${link.platform}`} style={styles.linkRow}>
+            <Text style={styles.linkPlatform}>{link.platform}</Text>
+            <Pressable
+              style={[styles.button, !hasDirect && styles.secondaryButton, styles.rowButton]}
+              onPress={() => (hasDirect ? openStreamingTitle(link) : openStreamingSearch(link))}
+            >
+              <Text style={styles.buttonText}>{hasDirect ? 'Abrir direto' : 'Buscar no app'}</Text>
+            </Pressable>
+          </View>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -115,12 +124,36 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: 16
   },
+  sectionTitle: {
+    color: '#E7ECF6',
+    fontSize: 17,
+    fontWeight: '700',
+    marginTop: 20
+  },
+  linkHint: {
+    color: '#97A3BA',
+    marginTop: 6
+  },
+  linkRow: {
+    marginTop: 12,
+    backgroundColor: '#101826',
+    borderRadius: 12,
+    padding: 12
+  },
+  linkPlatform: {
+    color: '#D6DEEE',
+    fontWeight: '700',
+    marginBottom: 8
+  },
   button: {
     backgroundColor: '#6D5BFF',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 22
+  },
+  rowButton: {
+    marginTop: 0
   },
   secondaryButton: {
     backgroundColor: '#243654',

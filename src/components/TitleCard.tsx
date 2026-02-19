@@ -11,6 +11,8 @@ export function TitleCard({
   onPress: () => void;
   compact?: boolean;
 }) {
+  const hasDirectLink = (item.deepLinks || []).some((link) => link.directApp || link.directWeb);
+
   return (
     <Pressable style={[styles.card, compact && styles.compact]} onPress={onPress}>
       {item.poster ? (
@@ -23,6 +25,9 @@ export function TitleCard({
       <Text numberOfLines={2} style={styles.title}>
         {item.title}
       </Text>
+      <View style={[styles.badge, hasDirectLink ? styles.badgeDirect : styles.badgeSearch]}>
+        <Text style={styles.badgeText}>{hasDirectLink ? 'Abre direto' : 'Via busca'}</Text>
+      </View>
       <Text numberOfLines={1} style={styles.meta}>
         {item.type.toUpperCase()} • {item.availableOn?.join(', ')}
       </Text>
@@ -61,6 +66,24 @@ const styles = StyleSheet.create({
     color: '#E7ECF6',
     fontWeight: '700',
     fontSize: 14
+  },
+  badge: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3
+  },
+  badgeDirect: {
+    backgroundColor: '#1F3A63'
+  },
+  badgeSearch: {
+    backgroundColor: '#30374A'
+  },
+  badgeText: {
+    color: '#D9E4FA',
+    fontSize: 10,
+    fontWeight: '700'
   },
   meta: {
     color: '#97A3BA',

@@ -77,6 +77,9 @@ export function HomeScreen({ navigation }: Props) {
   const [mostWatched, setMostWatched] = useState<TitleItem[]>([]);
   const [recommendations, setRecommendations] = useState<TitleItem[]>([]);
   const [platformCatalog, setPlatformCatalog] = useState<Record<string, TitleItem[]>>({});
+  const [catalogPageByPlatform, setCatalogPageByPlatform] = useState<Record<string, number>>({});
+  const [catalogLoadingByPlatform, setCatalogLoadingByPlatform] = useState<Record<string, boolean>>({});
+  const [catalogHasMoreByPlatform, setCatalogHasMoreByPlatform] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     async function load() {
@@ -117,13 +120,16 @@ export function HomeScreen({ navigation }: Props) {
     async function loadPlatformCatalog() {
       if (!selected.length) {
         setPlatformCatalog({});
+        setCatalogPageByPlatform({});
+        setCatalogLoadingByPlatform({});
+        setCatalogHasMoreByPlatform({});
         return;
       }
 
       const entries = await Promise.all(
         selected.map(async (platform) => {
           try {
-            const data = await fetchCatalogByPlatform(platform, 2, 220);
+            const data = await fetchCatalogByPlatform(platform, 2, 220, 1);
             return [platform, Array.isArray(data) ? data : []] as const;
           } catch (error) {
             return [platform, []] as const;
@@ -133,6 +139,13 @@ export function HomeScreen({ navigation }: Props) {
 
       if (!cancelled) {
         setPlatformCatalog(Object.fromEntries(entries));
+        setCatalogPageByPlatform(Object.fromEntries(selected.map((platform) => [platform, 1])));
+        setCatalogLoadingByPlatform(Object.fromEntries(selected.map((platform) => [platform, false])));
+        setCatalogHasMoreByPlatform(
+          Object.fromEntries(
+            entries.map(([platform, titles]) => [platform, Array.isArray(titles) && titles.length > 0])
+          )
+        );
       }
     }
 
@@ -147,10 +160,32 @@ export function HomeScreen({ navigation }: Props) {
     return selected
       .map((platform) => ({
         platform,
-        titles: (platformCatalog[platform] || []).slice(0, 60)
+        titles: platformCatalog[platform] || []
       }))
       .filter((group) => group.titles.length > 0);
   }, [platformCatalog, selected]);
+
+  async function loadMorePlatformCatalog(platform: string) {
+    if (catalogLoadingByPlatform[platform] || catalogHasMoreByPlatform[platform] === false) return;
+
+    const nextPage = (catalogPageByPlatform[platform] || 1) + 1;
+    setCatalogLoadingByPlatform((prev) => ({ ...prev, [platform]: true }));
+
+    try {
+      const more = await fetchCatalogByPlatform(platform, 1, 180, nextPage);
+      const normalizedMore = Array.isArray(more) ? more : [];
+      setPlatformCatalog((prev) => ({
+        ...prev,
+        [platform]: dedupeByMediaAndId([...(prev[platform] || []), ...normalizedMore])
+      }));
+      if (normalizedMore.length === 0) {
+        setCatalogHasMoreByPlatform((prev) => ({ ...prev, [platform]: false }));
+      }
+      setCatalogPageByPlatform((prev) => ({ ...prev, [platform]: nextPage }));
+    } finally {
+      setCatalogLoadingByPlatform((prev) => ({ ...prev, [platform]: false }));
+    }
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -209,7 +244,12 @@ export function HomeScreen({ navigation }: Props) {
                       <TitleCard item={item} onPress={() => navigation.navigate('Details', { id: item.id, mediaType: item.mediaType })} />
                     )}
                     showsHorizontalScrollIndicator={false}
+                    onEndReached={() => loadMorePlatformCatalog(group.platform)}
+                    onEndReachedThreshold={0.6}
                   />
+                  {catalogLoadingByPlatform[group.platform] && (
+                    <ActivityIndicator color="#6D5BFF" style={{ marginTop: 10 }} />
+                  )}
                 </View>
               ))}
             </>
