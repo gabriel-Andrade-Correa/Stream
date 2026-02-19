@@ -9,6 +9,7 @@ import { SettingsScreen } from '../screens/SettingsScreen';
 import { SplashScreen } from '../screens/SplashScreen';
 import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { DetailsScreen } from '../screens/DetailsScreen';
+import { RandomScreen } from '../screens/RandomScreen';
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -32,6 +33,7 @@ function TabsNavigator() {
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarIcon: () => <Text>🏠</Text> }} />
       <Tab.Screen name="Busca" component={SearchScreen} options={{ tabBarIcon: () => <Text>🔎</Text> }} />
+      <Tab.Screen name="Aleatorio" component={RandomScreen} options={{ tabBarIcon: () => <Text>🎲</Text> }} />
       <Tab.Screen name="Config" component={SettingsScreen} options={{ tabBarIcon: () => <Text>⚙</Text> }} />
     </Tab.Navigator>
   );

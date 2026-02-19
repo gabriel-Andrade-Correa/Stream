@@ -2,7 +2,7 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { TitleItem } from '../types';
 
-export function TitleCard({
+function TitleCardComponent({
   item,
   onPress,
   compact
@@ -34,6 +34,19 @@ export function TitleCard({
     </Pressable>
   );
 }
+
+export const TitleCard = React.memo(
+  TitleCardComponent,
+  (prev, next) =>
+    prev.compact === next.compact &&
+    prev.item.id === next.item.id &&
+    prev.item.mediaType === next.item.mediaType &&
+    prev.item.title === next.item.title &&
+    prev.item.poster === next.item.poster &&
+    prev.item.type === next.item.type &&
+    prev.item.availableOn?.join('|') === next.item.availableOn?.join('|') &&
+    prev.item.deepLinks?.length === next.item.deepLinks?.length
+);
 
 const styles = StyleSheet.create({
   card: {

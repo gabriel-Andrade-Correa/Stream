@@ -1,9 +1,9 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation';
-import { fetchCatalogByPlatform, fetchMostWatched, fetchRecommendations, fetchTrending } from '../services/api';
+import { fetchCatalogByPlatform, fetchRecommendations, fetchTrending } from '../services/api';
 import { useAppContext } from '../context/AppContext';
 import { SectionHeader } from '../components/SectionHeader';
 import { TitleCard } from '../components/TitleCard';
@@ -22,6 +22,16 @@ const PLATFORM_BRANDING: Record<string, PlatformBrand> = {
   'Disney+': { mark: 'D' },
   'Apple TV+': { mark: 'A' }
 };
+
+const CARD_FULL_WIDTH = 192;
+
+function getCardItemLayout(_: ArrayLike<TitleItem> | null | undefined, index: number) {
+  return {
+    length: CARD_FULL_WIDTH,
+    offset: CARD_FULL_WIDTH * index,
+    index
+  };
+}
 
 function filterBySelectedPlatforms(items: TitleItem[], selected: string[]) {
   if (!selected.length) return [];
@@ -69,12 +79,50 @@ function PlatformPill({ name }: { name: string }) {
   );
 }
 
+function StreamLogo() {
+  const shineX = useRef(new Animated.Value(-120)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(shineX, {
+        toValue: 260,
+        duration: 2200,
+        easing: Easing.linear,
+        useNativeDriver: true
+      })
+    );
+
+    loop.start();
+    return () => loop.stop();
+  }, [shineX]);
+
+  return (
+    <View style={styles.logoShell}>
+      <View style={styles.logoWrap}>
+        <View style={styles.logoIcon}>
+          <View style={styles.logoStrokeTop} />
+          <View style={styles.logoStrokeBottom} />
+        </View>
+        <Text style={styles.logoText}>stream</Text>
+      </View>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.logoShine,
+          {
+            transform: [{ translateX: shineX }, { rotate: '18deg' }]
+          }
+        ]}
+      />
+    </View>
+  );
+}
+
 export function HomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { selectedPlatforms } = useAppContext();
   const [loading, setLoading] = useState(true);
   const [trending, setTrending] = useState<TitleItem[]>([]);
-  const [mostWatched, setMostWatched] = useState<TitleItem[]>([]);
   const [recommendations, setRecommendations] = useState<TitleItem[]>([]);
   const [platformCatalog, setPlatformCatalog] = useState<Record<string, TitleItem[]>>({});
   const [catalogPageByPlatform, setCatalogPageByPlatform] = useState<Record<string, number>>({});
@@ -84,14 +132,9 @@ export function HomeScreen({ navigation }: Props) {
   useEffect(() => {
     async function load() {
       try {
-        const [trendData, mostWatchedData, recData] = await Promise.all([
-          fetchTrending(),
-          fetchMostWatched(),
-          fetchRecommendations()
-        ]);
+        const [trendData, recData] = await Promise.all([fetchTrending(), fetchRecommendations()]);
 
         setTrending(Array.isArray(trendData) ? trendData : []);
-        setMostWatched(Array.isArray(mostWatchedData) ? mostWatchedData : []);
         setRecommendations(Array.isArray(recData) ? recData : []);
       } finally {
         setLoading(false);
@@ -103,16 +146,12 @@ export function HomeScreen({ navigation }: Props) {
 
   const selected = Array.isArray(selectedPlatforms) ? selectedPlatforms.map(normalizePlatformName) : [];
   const filteredTrending = useMemo(() => filterBySelectedPlatforms(trending, selected), [trending, selected]);
-  const filteredMostWatched = useMemo(() => filterBySelectedPlatforms(mostWatched, selected), [mostWatched, selected]);
   const filteredRecommendations = useMemo(
     () => filterBySelectedPlatforms(recommendations, selected),
     [recommendations, selected]
   );
 
-  const spotlight = useMemo(
-    () => dedupeByMediaAndId([...filteredTrending, ...filteredMostWatched]).slice(0, 60),
-    [filteredTrending, filteredMostWatched]
-  );
+  const spotlight = useMemo(() => dedupeByMediaAndId(filteredTrending).slice(0, 80), [filteredTrending]);
 
   useEffect(() => {
     let cancelled = false;
@@ -129,7 +168,7 @@ export function HomeScreen({ navigation }: Props) {
       const entries = await Promise.all(
         selected.map(async (platform) => {
           try {
-            const data = await fetchCatalogByPlatform(platform, 2, 220, 1);
+            const data = await fetchCatalogByPlatform(platform, 1, 100, 1);
             return [platform, Array.isArray(data) ? data : []] as const;
           } catch (error) {
             return [platform, []] as const;
@@ -172,7 +211,7 @@ export function HomeScreen({ navigation }: Props) {
     setCatalogLoadingByPlatform((prev) => ({ ...prev, [platform]: true }));
 
     try {
-      const more = await fetchCatalogByPlatform(platform, 1, 180, nextPage);
+      const more = await fetchCatalogByPlatform(platform, 1, 120, nextPage);
       const normalizedMore = Array.isArray(more) ? more : [];
       setPlatformCatalog((prev) => ({
         ...prev,
@@ -187,12 +226,20 @@ export function HomeScreen({ navigation }: Props) {
     }
   }
 
+  const openDetails = useCallback(
+    (item: TitleItem) => navigation.navigate('Details', { id: item.id, mediaType: item.mediaType }),
+    [navigation]
+  );
+
+  const renderTitleCard = useCallback(
+    ({ item }: { item: TitleItem }) => <TitleCard item={item} onPress={() => openDetails(item)} />,
+    [openDetails]
+  );
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={[styles.heroCard, { marginTop: insets.top + 8 }]}> 
-        <Text style={styles.heading}>Seu hub de streaming</Text>
-        <Text style={styles.subheading}>Tudo que importa em um unico lugar</Text>
-        <Text style={styles.metaLine}>Plataformas ativas: {selected.join(', ') || 'Nenhuma selecionada'}</Text>
+      <View style={[styles.brandHeader, { marginTop: insets.top + 10 }]}>
+        <StreamLogo />
       </View>
 
       {loading && <ActivityIndicator color="#6D5BFF" size="large" style={{ marginTop: 24 }} />}
@@ -215,10 +262,13 @@ export function HomeScreen({ navigation }: Props) {
                 horizontal
                 data={spotlight}
                 keyExtractor={(item) => `${item.mediaType || item.type}-${item.id}`}
-                renderItem={({ item }) => (
-                  <TitleCard item={item} onPress={() => navigation.navigate('Details', { id: item.id, mediaType: item.mediaType })} />
-                )}
+                renderItem={renderTitleCard}
                 showsHorizontalScrollIndicator={false}
+                removeClippedSubviews
+                initialNumToRender={6}
+                maxToRenderPerBatch={6}
+                windowSize={5}
+                getItemLayout={getCardItemLayout}
               />
 
               <SectionHeader title="Recomendados para voce" />
@@ -226,10 +276,13 @@ export function HomeScreen({ navigation }: Props) {
                 horizontal
                 data={filteredRecommendations.slice(0, 40)}
                 keyExtractor={(item) => `rec-${item.mediaType || item.type}-${item.id}`}
-                renderItem={({ item }) => (
-                  <TitleCard item={item} onPress={() => navigation.navigate('Details', { id: item.id, mediaType: item.mediaType })} />
-                )}
+                renderItem={renderTitleCard}
                 showsHorizontalScrollIndicator={false}
+                removeClippedSubviews
+                initialNumToRender={6}
+                maxToRenderPerBatch={6}
+                windowSize={5}
+                getItemLayout={getCardItemLayout}
               />
 
               <SectionHeader title="Catalogo por plataforma" />
@@ -240,12 +293,15 @@ export function HomeScreen({ navigation }: Props) {
                     horizontal
                     data={group.titles}
                     keyExtractor={(item) => `${group.platform}-${item.mediaType || item.type}-${item.id}`}
-                    renderItem={({ item }) => (
-                      <TitleCard item={item} onPress={() => navigation.navigate('Details', { id: item.id, mediaType: item.mediaType })} />
-                    )}
+                    renderItem={renderTitleCard}
                     showsHorizontalScrollIndicator={false}
                     onEndReached={() => loadMorePlatformCatalog(group.platform)}
                     onEndReachedThreshold={0.6}
+                    removeClippedSubviews
+                    initialNumToRender={8}
+                    maxToRenderPerBatch={8}
+                    windowSize={6}
+                    getItemLayout={getCardItemLayout}
                   />
                   {catalogLoadingByPlatform[group.platform] && (
                     <ActivityIndicator color="#6D5BFF" style={{ marginTop: 10 }} />
@@ -269,26 +325,54 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 32
   },
-  heroCard: {
-    backgroundColor: '#0A0A0A',
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12
+  brandHeader: {
+    marginBottom: 10,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
-  heading: {
-    color: '#E7ECF6',
-    fontSize: 30,
-    fontWeight: '800'
+  logoShell: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 14
   },
-  subheading: {
-    color: '#B8C2D6',
-    marginTop: 6,
-    fontSize: 15
+  logoWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4
   },
-  metaLine: {
-    color: '#97A3BA',
-    marginTop: 10,
-    fontSize: 13
+  logoIcon: {
+    width: 28,
+    height: 28,
+    marginRight: 12,
+    justifyContent: 'space-between'
+  },
+  logoStrokeTop: {
+    height: 11,
+    borderRadius: 8,
+    backgroundColor: '#9BB8FF',
+    transform: [{ skewX: '-24deg' }]
+  },
+  logoStrokeBottom: {
+    height: 11,
+    borderRadius: 8,
+    backgroundColor: '#6D5BFF',
+    transform: [{ skewX: '-24deg' }]
+  },
+  logoText: {
+    color: '#F2F6FF',
+    fontSize: 33,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    textTransform: 'lowercase'
+  },
+  logoShine: {
+    position: 'absolute',
+    top: -12,
+    bottom: -12,
+    width: 34,
+    backgroundColor: '#F3D06B',
+    opacity: 0.22
   },
   platformRow: {
     flexDirection: 'row',
