@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, View } from 
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation';
-import { fetchMostWatched, fetchRecommendations, fetchTrending } from '../services/api';
+import { fetchCatalogByPlatform, fetchMostWatched, fetchRecommendations, fetchTrending } from '../services/api';
 import { useAppContext } from '../context/AppContext';
 import { SectionHeader } from '../components/SectionHeader';
 import { TitleCard } from '../components/TitleCard';
@@ -76,6 +76,7 @@ export function HomeScreen({ navigation }: Props) {
   const [trending, setTrending] = useState<TitleItem[]>([]);
   const [mostWatched, setMostWatched] = useState<TitleItem[]>([]);
   const [recommendations, setRecommendations] = useState<TitleItem[]>([]);
+  const [platformCatalog, setPlatformCatalog] = useState<Record<string, TitleItem[]>>({});
 
   useEffect(() => {
     async function load() {
@@ -110,26 +111,46 @@ export function HomeScreen({ navigation }: Props) {
     [filteredTrending, filteredMostWatched]
   );
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPlatformCatalog() {
+      if (!selected.length) {
+        setPlatformCatalog({});
+        return;
+      }
+
+      const entries = await Promise.all(
+        selected.map(async (platform) => {
+          try {
+            const data = await fetchCatalogByPlatform(platform, 2, 220);
+            return [platform, Array.isArray(data) ? data : []] as const;
+          } catch (error) {
+            return [platform, []] as const;
+          }
+        })
+      );
+
+      if (!cancelled) {
+        setPlatformCatalog(Object.fromEntries(entries));
+      }
+    }
+
+    loadPlatformCatalog();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selected.join('|')]);
+
   const catalogByPlatform = useMemo(() => {
-    const source = spotlight;
-    const map: Record<string, TitleItem[]> = {};
-
-    source.forEach((item) => {
-      (item.availableOn || []).forEach((platformRaw) => {
-        const platform = normalizePlatformName(platformRaw);
-        if (!selected.includes(platform)) return;
-        if (!map[platform]) map[platform] = [];
-        map[platform].push(item);
-      });
-    });
-
     return selected
       .map((platform) => ({
         platform,
-        titles: (map[platform] || []).slice(0, 40)
+        titles: (platformCatalog[platform] || []).slice(0, 60)
       }))
       .filter((group) => group.titles.length > 0);
-  }, [spotlight, selected]);
+  }, [platformCatalog, selected]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
