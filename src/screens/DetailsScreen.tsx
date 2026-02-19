@@ -1,4 +1,4 @@
-Ôªøimport React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
@@ -26,8 +26,12 @@ export function DetailsScreen({ route }: Props) {
     load();
   }, [id, mediaType]);
 
-  const firstLink = useMemo(() => title?.deepLinks?.[0], [title]);
-  const hasDirectLink = !!(firstLink?.directApp || firstLink?.directWeb);
+  const primaryLink = useMemo(() => {
+    if (!title?.deepLinks?.length) return null;
+    return title.deepLinks.find((link) => link.directApp || link.directWeb) || title.deepLinks[0];
+  }, [title]);
+
+  const hasDirectLink = !!(primaryLink?.directApp || primaryLink?.directWeb);
 
   if (loading) {
     return (
@@ -40,7 +44,7 @@ export function DetailsScreen({ route }: Props) {
   if (!title) {
     return (
       <View style={styles.center}>
-        <Text style={styles.emptyText}>T√≠tulo n√£o encontrado.</Text>
+        <Text style={styles.emptyText}>TÌtulo n„o encontrado.</Text>
       </View>
     );
   }
@@ -56,17 +60,17 @@ export function DetailsScreen({ route }: Props) {
       )}
 
       <Text style={styles.title}>{title.title}</Text>
-      <Text style={styles.meta}>{title.type.toUpperCase()} ‚Ä¢ {(title.availableOn || []).join(', ')}</Text>
-      <Text style={styles.overview}>{title.overview || 'Sem sinopse dispon√≠vel.'}</Text>
+      <Text style={styles.meta}>{title.type.toUpperCase()} ï {(title.availableOn || []).join(', ')}</Text>
+      <Text style={styles.overview}>{title.overview || 'Sem sinopse disponÌvel.'}</Text>
 
-      {!!firstLink && hasDirectLink && (
-        <Pressable style={styles.button} onPress={() => openStreamingTitle(firstLink)}>
+      {!!primaryLink && hasDirectLink && (
+        <Pressable style={styles.button} onPress={() => openStreamingTitle(primaryLink)}>
           <Text style={styles.buttonText}>Abrir titulo no streaming</Text>
         </Pressable>
       )}
 
-      {!!firstLink && (
-        <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => openStreamingSearch(firstLink)}>
+      {!!primaryLink && (
+        <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => openStreamingSearch(primaryLink)}>
           <Text style={styles.buttonText}>Buscar no streaming</Text>
         </Pressable>
       )}
