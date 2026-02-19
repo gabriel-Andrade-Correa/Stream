@@ -4,26 +4,35 @@ import { PlatformChip } from '../components/PlatformChip';
 import { useAppContext } from '../context/AppContext';
 import { fetchPlatforms } from '../services/api';
 import { StreamingPlatform } from '../types';
+import { DEFAULT_PLATFORM_NAMES } from '../data/platforms';
 
 export function SettingsScreen() {
   const { theme, selectedPlatforms, toggleTheme, setSelectedPlatforms, clearPreferences } = useAppContext();
-  const [platforms, setPlatforms] = useState<StreamingPlatform[]>([]);
+  const [platforms, setPlatforms] = useState<StreamingPlatform[]>(
+    DEFAULT_PLATFORM_NAMES.map((name) => ({
+      id: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      name
+    }))
+  );
 
   useEffect(() => {
-    fetchPlatforms().then(setPlatforms).catch(() => setPlatforms([]));
+    fetchPlatforms().then(setPlatforms).catch(() => {
+      // Keep fallback list for manual selection.
+    });
   }, []);
 
   function togglePlatform(name: string) {
-    const exists = selectedPlatforms.includes(name);
+    const currentSelected = Array.isArray(selectedPlatforms) ? selectedPlatforms : [];
+    const exists = currentSelected.includes(name);
     const next = exists
-      ? selectedPlatforms.filter((platform) => platform !== name)
-      : [...selectedPlatforms, name];
+      ? currentSelected.filter((platform) => platform !== name)
+      : [...currentSelected, name];
 
     setSelectedPlatforms(next);
   }
 
   function handleClear() {
-    Alert.alert('Limpar preferências', 'Deseja resetar onboarding, tema e streams selecionados?', [
+    Alert.alert('Limpar preferencias', 'Deseja resetar onboarding, tema e streams selecionados?', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Limpar', style: 'destructive', onPress: () => clearPreferences() }
     ]);
@@ -31,16 +40,17 @@ export function SettingsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.heading}>Configurações</Text>
+      <Text style={styles.heading}>Configuracoes</Text>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Meus streamings</Text>
+        <Text style={styles.cardTitle}>Escolha suas plataformas</Text>
+        <Text style={styles.cardSubtitle}>Somente os titulos dessas plataformas aparecerao no app.</Text>
         <View style={styles.rowWrap}>
           {platforms.map((platform) => (
             <PlatformChip
               key={platform.id}
               label={platform.name}
-              selected={selectedPlatforms.includes(platform.name)}
+              selected={(Array.isArray(selectedPlatforms) ? selectedPlatforms : []).includes(platform.name)}
               onPress={() => togglePlatform(platform.name)}
             />
           ))}
@@ -53,7 +63,7 @@ export function SettingsScreen() {
       </View>
 
       <TouchableOpacity style={styles.clearBtn} onPress={handleClear}>
-        <Text style={styles.clearBtnText}>Limpar preferências</Text>
+        <Text style={styles.clearBtnText}>Limpar preferencias</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -85,7 +95,11 @@ const styles = StyleSheet.create({
   cardTitle: {
     color: '#E7ECF6',
     fontWeight: '700',
-    marginBottom: 10
+    marginBottom: 8
+  },
+  cardSubtitle: {
+    color: '#97A3BA',
+    marginBottom: 12
   },
   rowWrap: {
     flexDirection: 'row',

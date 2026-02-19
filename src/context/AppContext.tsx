@@ -52,9 +52,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const remotePrefs = await fetchPreferences();
         setTheme(remotePrefs.theme);
         setFavoriteGenre(remotePrefs.favoriteGenre);
-        setSelectedPlatformsState(remotePrefs.selectedPlatforms || []);
+
+        const savedPlatforms = Array.isArray(remotePrefs.selectedPlatforms)
+          ? remotePrefs.selectedPlatforms
+          : [];
+        setSelectedPlatformsState(savedPlatforms);
       } catch (error) {
-        console.log('Erro ao carregar preferências', error);
+        console.log('Erro ao carregar preferencias', error);
       } finally {
         setLoading(false);
       }
@@ -71,12 +75,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   async function toggleTheme() {
     const nextTheme: ThemeType = theme === 'dark' ? 'light' : 'dark';
     setTheme(nextTheme);
-    await updatePreferences({ theme: nextTheme });
+    try {
+      await updatePreferences({ theme: nextTheme });
+    } catch (error) {
+      // Backend offline; keep local state.
+    }
   }
 
   async function setSelectedPlatforms(platforms: string[]) {
-    setSelectedPlatformsState(platforms);
-    await updatePreferences({ selectedPlatforms: platforms });
+    const normalized = Array.isArray(platforms) ? platforms : [];
+    setSelectedPlatformsState(normalized);
+    try {
+      await updatePreferences({ selectedPlatforms: normalized });
+    } catch (error) {
+      // Backend offline; keep local state.
+    }
   }
 
   async function clearPreferences() {
@@ -90,10 +103,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSelectedPlatformsState([]);
     setOnboardedState(false);
 
-    await Promise.all([
-      AsyncStorage.removeItem(ONBOARDING_KEY),
-      updatePreferences(reset)
-    ]);
+    await AsyncStorage.removeItem(ONBOARDING_KEY);
+    try {
+      await updatePreferences(reset);
+    } catch (error) {
+      // Backend offline; keep local state.
+    }
   }
 
   const value = useMemo(

@@ -4,7 +4,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { fetchTitle } from '../services/api';
 import { TitleItem } from '../types';
-import { openStreamingLink } from '../utils/deeplink';
+import { openStreamingSearch, openStreamingTitle } from '../utils/deeplink';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Details'>;
 
@@ -27,6 +27,7 @@ export function DetailsScreen({ route }: Props) {
   }, [id]);
 
   const firstLink = useMemo(() => title?.deepLinks?.[0], [title]);
+  const hasDirectLink = !!(firstLink?.directApp || firstLink?.directWeb);
 
   if (loading) {
     return (
@@ -55,12 +56,18 @@ export function DetailsScreen({ route }: Props) {
       )}
 
       <Text style={styles.title}>{title.title}</Text>
-      <Text style={styles.meta}>{title.type.toUpperCase()} • {title.availableOn.join(', ')}</Text>
+      <Text style={styles.meta}>{title.type.toUpperCase()} • {(title.availableOn || []).join(', ')}</Text>
       <Text style={styles.overview}>{title.overview || 'Sem sinopse disponível.'}</Text>
 
+      {!!firstLink && hasDirectLink && (
+        <Pressable style={styles.button} onPress={() => openStreamingTitle(firstLink)}>
+          <Text style={styles.buttonText}>Abrir titulo no streaming</Text>
+        </Pressable>
+      )}
+
       {!!firstLink && (
-        <Pressable style={styles.button} onPress={() => openStreamingLink(firstLink)}>
-          <Text style={styles.buttonText}>Abrir no streaming</Text>
+        <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => openStreamingSearch(firstLink)}>
+          <Text style={styles.buttonText}>Buscar no streaming</Text>
         </Pressable>
       )}
     </ScrollView>
@@ -110,6 +117,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 22
+  },
+  secondaryButton: {
+    backgroundColor: '#243654',
+    marginTop: 10
   },
   buttonText: {
     color: '#FFFFFF',

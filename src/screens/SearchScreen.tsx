@@ -4,10 +4,13 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { searchTitles } from '../services/api';
 import { TitleItem } from '../types';
+import { useAppContext } from '../context/AppContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Tabs'>;
 
 export function SearchScreen({ navigation }: Props) {
+  const { selectedPlatforms } = useAppContext();
+  const selected = Array.isArray(selectedPlatforms) ? selectedPlatforms : [];
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'filme' | 'serie'>('all');
@@ -25,25 +28,38 @@ export function SearchScreen({ navigation }: Props) {
     }
   }
 
-  const filtered = useMemo(
-    () => results.filter((item) => (filter === 'all' ? true : item.type === filter)),
+  const filteredByType = useMemo(
+    () => (Array.isArray(results) ? results : []).filter((item) => (filter === 'all' ? true : item.type === filter)),
     [results, filter]
   );
+
+  const filtered = useMemo(() => {
+    if (!selected.length) return [];
+
+    return filteredByType.filter((item) =>
+      (item.availableOn || []).some((platform) => selected.includes(platform))
+    );
+  }, [filteredByType, selected]);
 
   const grouped = useMemo(() => {
     const acc: Record<string, TitleItem[]> = {};
     filtered.forEach((item) => {
-      item.availableOn.forEach((platform) => {
-        if (!acc[platform]) acc[platform] = [];
-        acc[platform].push(item);
-      });
+      (item.availableOn || [])
+        .filter((platform) => !selected.length || selected.includes(platform))
+        .forEach((platform) => {
+          if (!acc[platform]) acc[platform] = [];
+          acc[platform].push(item);
+        });
     });
     return acc;
-  }, [filtered]);
+  }, [filtered, selected]);
 
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>Busca global</Text>
+      {!!selected.length && (
+        <Text style={styles.platformHint}>Filtrando por: {selected.join(', ')}</Text>
+      )}
       <View style={styles.searchRow}>
         <TextInput
           style={styles.input}
@@ -73,7 +89,7 @@ export function SearchScreen({ navigation }: Props) {
       {loading && <ActivityIndicator color="#6D5BFF" style={{ marginTop: 16 }} />}
 
       <ScrollView contentContainerStyle={styles.results}>
-        {Object.entries(grouped).map(([platform, items]) => (
+      {Object.entries(grouped).map(([platform, items]) => (
           <View key={platform} style={styles.groupCard}>
             <Text style={styles.groupTitle}>{platform}</Text>
             {items.slice(0, 8).map((item) => (
@@ -83,6 +99,12 @@ export function SearchScreen({ navigation }: Props) {
             ))}
           </View>
         ))}
+        {!loading && !!query.trim() && Object.keys(grouped).length === 0 && (
+          <Text style={styles.emptyText}>Nenhum resultado para as plataformas selecionadas.</Text>
+        )}
+        {!loading && !selected.length && (
+          <Text style={styles.emptyText}>Selecione pelo menos uma plataforma em Configuracoes.</Text>
+        )}
       </ScrollView>
     </View>
   );
@@ -98,6 +120,10 @@ const styles = StyleSheet.create({
     color: '#E7ECF6',
     fontSize: 28,
     fontWeight: '800'
+  },
+  platformHint: {
+    color: '#97A3BA',
+    marginTop: 6
   },
   searchRow: {
     flexDirection: 'row',
@@ -164,5 +190,9 @@ const styles = StyleSheet.create({
   itemTitle: {
     color: '#E7ECF6',
     paddingVertical: 4
+  },
+  emptyText: {
+    color: '#97A3BA',
+    marginTop: 16
   }
 });

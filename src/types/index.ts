@@ -10,6 +10,8 @@ export interface DeepLinkOption {
   platform: string;
   app: string;
   web: string;
+  directApp?: string | null;
+  directWeb?: string | null;
 }
 
 export interface TitleItem {
