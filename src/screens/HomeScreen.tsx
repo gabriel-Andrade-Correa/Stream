@@ -83,7 +83,7 @@ export function HomeScreen({ navigation }: Props) {
     return selected
       .map((platform) => ({
         platform,
-        titles: (map[platform] || []).slice(0, 10)
+        titles: (map[platform] || []).slice(0, 40)
       }))
       .filter((group) => group.titles.length > 0);
   }, [filteredTrending, selected]);
